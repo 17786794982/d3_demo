@@ -1,0 +1,378 @@
+<template>
+  <div id="d3_two_tree"></div>
+</template>
+
+<script>
+  import * as d3 from 'd3';
+  import treeData from './treeData';
+  
+  export default {
+    name: 'vTree',
+    data() {
+      return {
+        directions: ['upward', 'downward'],
+        treeData: {},
+      }
+    },
+    mounted() {
+      this.$nextTick(() => {
+        this.drawChart();
+      })
+    },
+    methods: {
+      drawChart() {
+        let self = this;
+        self.directions.forEach(function (direction) {
+          self.treeData[direction] = treeData[direction];
+        });
+        self.graphTree();
+      },
+      getTreeConfig() {
+        let treeConfig = {'margin': {'top': 10, 'right': 5, 'bottom': 0, 'left': 30}}
+        // This will be the maximum dimensions
+        treeConfig.chartWidth = (960 - treeConfig.margin.right - treeConfig.margin.left);
+        treeConfig.chartHeight = (500 - treeConfig.margin.top - treeConfig.margin.bottom);
+        treeConfig.centralHeight = treeConfig.chartHeight / 2;
+        treeConfig.centralWidth = treeConfig.chartWidth / 2;
+        treeConfig.linkLength = 100;
+        treeConfig.duration = 200;
+        return treeConfig;
+      },
+      graphTree() {
+        let self = this;
+        let config = this.getTreeConfig();
+        let linkLength = config.linkLength;
+        let duration = config.duration;
+        // id is used to name all the nodes;
+        let id = 0;
+        let diagonal = d3.svg.diagonal()
+          .projection(function (d) {
+            return [d.x, d.y];
+          });
+        let zoom = d3.behavior.zoom()
+          .scaleExtent([0.1, 2])
+          .on('zoom', redraw);
+        let svg = d3.select('#d3_two_tree')
+          .append('svg')
+          .attr('width', config.chartWidth + config.margin.right + config.margin.left)
+          .attr('height', config.chartHeight + config.margin.top + config.margin.bottom)
+          .on('mousedown', disableRightClick)
+          .call(zoom)
+          .on('dblclick.zoom', null);
+        let treeG = svg.append('g')
+          .attr('transform', 'translate(' + config.margin.left + ',' + config.margin.top + ')');
+        
+        let rootG = treeG.append('g').attr('class', 'center-root-wrapper')
+          .attr('transform', `translate(${config.centralWidth}, ${config.centralHeight + 5})`);
+        rootG.append('rect')
+          .attr({
+            width: 300,
+            height: 20,
+            x: -100,
+            y: -10,
+            fill: '#0ff',
+          })
+        rootG.append('text')
+          .text('D3 Development Dependency')
+          .attr('class', 'centralText')
+          .attr('text-anchor', 'middle');
+        // Initialize the tree nodes and update chart.
+        for (let d in this.directions) {
+          let direction = this.directions[d];
+          let data = self.treeData[direction];
+          data.x0 = config.centralWidth;
+          data.y0 = config.centralHeight;
+          // Hide all children nodes other than direct generation.
+          data.children.forEach(collapse);
+          update(data, data, treeG);
+        }
+        
+        /**
+         * Update nodes and links based on direction data.
+         * @param {Object} source Object for current chart distribution to identify
+         *    where the children nodes will branch from.
+         * @param {Object} originalData Original data object to get configurations.
+         * @param {Object} g Handle to svg.g.
+         */
+        function update(source, originalData, g) {
+          // Set up the upward vs downward separation.
+          let direction = originalData['direction'];
+          let forUpward = direction == 'upward';
+          let node_class = direction + 'Node';
+          let link_class = direction + 'Link';
+          let downwardSign = (forUpward) ? -1 : 1;
+          let nodeColor = (forUpward) ? '#37592b' : '#8b4513';
+          // Reset tree layout based on direction, since the downward chart has
+          // way too many nodes to fit in the screen, while we want a symmetric
+          // view for upward chart.
+          let nodeSpace = 20;
+          
+          let tree = d3.layout.tree()
+            .nodeSize([nodeSpace, nodeSpace])
+            .size([config.chartWidth, config.chartHeight]);
+          tree.size = null;
+          let nodes = tree.nodes(originalData);
+          let links = tree.links(nodes);
+          // Offset x-position for downward to view the left most record.
+          // Normalize for fixed-depth.
+          nodes.forEach(function (d) {
+            d.y = downwardSign * (d.depth * linkLength) + config.centralHeight;
+            // Position for origin node.
+            if (d.name === 'origin') {
+              d.x = config.centralWidth;
+              d.y += downwardSign * 25;
+            }
+          });
+          
+          // Update the node.
+          let node = g.selectAll('g.' + node_class)
+            .data(nodes, function (d) {
+              return d.id || (d.id = ++id);
+            });
+          // Enter any new nodes at the parent's previous position.
+          let nodeEnter = node.enter().append('g')
+            .attr('class', node_class)
+            .attr('transform', function (d) {
+              return 'translate(' + source.x0 + ',' + source.y0 + ')';
+            })
+            .on('click', click);
+          nodeEnter.append('circle')
+            .attr('r', 1e-6);
+          // Add Text stylings for node main texts
+          nodeEnter.append('text')
+            .attr('x', function (d) {
+              return forUpward ? -10 : 10;
+            })
+            .attr('dy', '.35em')
+            .attr('text-anchor', function (d) {
+              return forUpward ? 'end' : 'start';
+            })
+            .text(function (d) {
+              // Text for origin node.
+              if (d.name == 'origin') {
+                return ((forUpward) ?
+                    'Dependency of D3' :
+                    'Files dependent on D3'
+                ) + ' [Click to fold/expand all]';
+              }
+              // Text for summary nodes.
+              if (d.repeated) {
+                return '[Recurring] ' + d.name;
+              }
+              return d.name;
+            })
+            .style('fill-opacity', 1e-6)
+            .style({
+              'fill': function (d) {
+                if (d.name == 'origin') {
+                  return nodeColor;
+                }
+              }
+            })
+            .attr('transform', function (d) {
+              if (d.name != 'origin') {
+                return 'rotate(-20)';
+              }
+            })
+          ;
+          
+          // Transition nodes to their new position.
+          let nodeUpdate = node.transition()
+            .duration(duration)
+            .attr('transform', function (d) {
+              return 'translate(' + d.x + ',' + d.y + ')';
+            });
+          nodeUpdate.select('circle')
+            .attr('r', 6)
+            .style('fill', function (d) {
+              if (d._children || d.children) {
+                return nodeColor;
+              }
+            })
+            .style('fill-opacity', function (d) {
+              if (d.children) {
+                return 0.35;
+              }
+            })
+            // Setting summary node style as class as mass style setting is
+            // not compatible to circles.
+            .style('stroke-width', function (d) {
+              if (d.repeated) {
+                return 5;
+              }
+            });
+          
+          nodeUpdate.select('text').style('fill-opacity', 1);
+          
+          // Transition exiting nodes to the parent's new position.
+          let nodeExit = node.exit().transition()
+            .duration(duration)
+            .attr('transform', function (d) {
+              return 'translate(' + source.x + ',' + source.y + ')';
+            })
+            .remove();
+          nodeExit.select('circle')
+            .attr('r', 1e-6);
+          nodeExit.select('text')
+            .style('fill-opacity', 1e-6);
+          
+          // Update the links.
+          let link = g.selectAll('path.' + link_class)
+            .data(links, function (d) {
+              return d.target.id;
+            });
+          
+          // Enter any new links at the parent's previous position.
+          link.enter().insert('path', 'g')
+            .attr('class', link_class)
+            .attr('d', function (d) {
+              let o = {x: source.x0, y: source.y0};
+              return diagonal({source: o, target: o});
+            });
+          // Transition links to their new position.
+          link.transition()
+            .duration(duration)
+            .attr('d', diagonal);
+          // Transition exiting nodes to the parent's new position.
+          link.exit().transition()
+            .duration(duration)
+            .attr('d', function (d) {
+              let o = {x: source.x, y: source.y};
+              return diagonal({source: o, target: o});
+            })
+            .remove();
+          // Stash the old positions for transition.
+          nodes.forEach(function (d) {
+            d.x0 = d.x;
+            d.y0 = d.y;
+          });
+          
+          /**
+           * Tree function to toggle on click.
+           * @param {Object} d data object for D3 use.
+           */
+          function click(d) {
+            if (d.children) {
+              d._children = d.children;
+              d.children = null;
+            } else {
+              d.children = d._children;
+              d._children = null;
+              // expand all if it's the first node
+              if (d.name == 'origin') {
+                d.children.forEach(expand);
+              }
+            }
+            update(d, originalData, g);
+          }
+        }
+        
+        // Collapse and Expand can be modified to include touched nodes.
+        /**
+         * Tree function to expand all nodes.
+         * @param {Object} d data object for D3 use.
+         */
+        function expand(d) {
+          if (d._children) {
+            d.children = d._children;
+            d.children.forEach(expand);
+            d._children = null;
+          }
+        }
+        
+        /**
+         * Tree function to collapse children nodes.
+         * @param {Object} d data object for D3 use.
+         */
+        function collapse(d) {
+          if (d.children && d.children.length != 0) {
+            d._children = d.children;
+            d._children.forEach(collapse);
+            d.children = null;
+          }
+        }
+        
+        /**
+         * Tree function to redraw and zoom.
+         */
+        function redraw() {
+          treeG.attr('transform', 'translate(' + d3.event.translate + ')' +
+            ' scale(' + d3.event.scale + ')');
+        }
+        
+        /**
+         * Tree functions to disable right click.
+         */
+        function disableRightClick() {
+          // stop zoom
+          if (d3.event.button == 2) {
+            console.log('No right click allowed');
+            d3.event.stopImmediatePropagation();
+          }
+        }
+        
+        /**
+         * Tree sort function to sort and arrange nodes.
+         * @param {Object} a First element to compare.
+         * @param {Object} b Second element to compare.
+         * @return {Boolean} boolean indicating the predicate outcome.
+         */
+        function sortByDate(a, b) {
+          // Compare the individuals based on participation date
+          //(no need to compare when there is only 1 summary)
+          let aNum = a.name.substr(a.name.lastIndexOf('(') + 1, 4);
+          let bNum = b.name.substr(b.name.lastIndexOf('(') + 1, 4);
+          // Sort by date, name, id.
+          return d3.ascending(aNum, bNum) ||
+            d3.ascending(a.name, b.name) ||
+            d3.ascending(a.id, b.id);
+        }
+      },
+    }
+  }
+</script>
+
+<!-- Add "scoped" attribute to limit CSS to this component only -->
+<style>
+  svg {
+    cursor: all-scroll;
+  }
+  
+  .centralText {
+    font: 23 spx sans-serif;
+    fill: #222;
+    font-weight: bold;
+  }
+  
+  .downwardNode circle {
+    fill: #fff;
+    stroke: #8b4513;
+    stroke-width: 2.5px;
+  }
+  
+  .upwardNode circle {
+    fill: #fff;
+    stroke: #37592b;
+    stroke-width: 2.5px;
+  }
+  
+  .downwardNode text,
+  .upwardNode text {
+    font: 12px sans-serif;
+    font-weight: bold;
+  }
+  
+  .downwardLink {
+    fill: none;
+    stroke: #8b4513;
+    stroke-width: 3px;
+    opacity: 0.2;
+  }
+  
+  .upwardLink {
+    fill: none;
+    stroke: #37592b;
+    stroke-width: 3px;
+    opacity: 0.2;
+  }
+</style>
