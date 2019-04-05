@@ -8,6 +8,9 @@
       <li>
         <router-link :to="{name: 'tree'}">tree</router-link>
       </li>
+      <li>
+        <router-link :to="{name: 'svg'}">svg</router-link>
+      </li>
     </ul>
     <router-view/>
   </div>

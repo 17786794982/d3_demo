@@ -134,7 +134,7 @@
         
         link.each((d, i) => {
           console.log(d);
-          if (d.source.name === '中国' && d.target.name === '四川') {
+          if (d.source.name === '中国') {
             addCircle(i, Math.random() * 500);
           }
           // if (d.source.name === '四川' && d.target.name === '成都') {

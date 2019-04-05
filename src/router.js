@@ -9,6 +9,11 @@ export default new Router({
       path: '/',
     },
     {
+      path: '/svg',
+      name: 'svg',
+      component: () => import(/* webpackChunkName: 'svg' */ '@/views/svg/svg.vue')
+    },
+    {
       path: '/force',
       name: 'force',
       component: () => import(/* webpackChunkName: 'force' */ '@/views/force'),
