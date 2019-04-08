@@ -56,7 +56,7 @@
         </animateMotion>
       </rect>
     </svg>
-    <h5>沿着path运动2</h5>
+    <h5>沿着path运动2--已经有了path轨迹</h5>
     <svg width="200" height="200">
       <path id="movePath" d="M50,135C100,25 150,225 200,125" fill="none" stroke="black"></path>
       <rect x="-10" y="-10" width="20" height="20" style="fill:#ff9;stroke:black">
@@ -68,16 +68,56 @@
         </animateMotion>
       </rect>
     </svg>
+    <h5>沿着path运动3--img</h5>
+    <svg id="animate_img" width="200" height="200"></svg>
   </div>
 </template>
 
 <script>
+  import * as d3 from 'd3';
+  import animatePath from './img/path.svg';
+  
   export default {
     name: 'vAnimate',
     data() {
       return {};
     },
-    methods: {}
+    mounted() {
+      this.$nextTick(() => {
+        this.animateImg();
+      })
+    },
+    methods: {
+      animateImg() {
+        let svg = d3.select('#animate_img');
+        svg.append('path')
+          .attr({
+            'id': 'movePath',
+            'd': 'M50,135C100,25 150,225 200,125',
+            'fill': 'none',
+            'stroke': 'black',
+          });
+        let rect = svg.append('image')
+          .attr({
+            'x': '-10',
+            'y': '-10',
+            'width': '20',
+            'height': '20',
+            'fill': '#ff9',
+            'stroke': '#000',
+            'xlink:href': animatePath,
+          });
+        let animateMotion = rect.append('animateMotion')
+          .attr({
+            'dur': '5s',
+            'fill': 'freeze',
+            'rotate': 'auto',
+            'repeatCount': 'indefinite',
+          });
+        animateMotion.append('mpath')
+          .attr('xlink:href', '#movePath');
+      }
+    }
   };
 </script>
 
