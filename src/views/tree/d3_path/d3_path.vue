@@ -8,11 +8,15 @@
   import * as d3 from 'd3';
   import treeJson from './tree.json';
   // import logoImg from '@/assets/logo.png';
+  import path_icon from './img/path.svg';
   
   export default {
     name: 'd3_path',
     data() {
-      return {};
+      return {
+        id_index: 0,
+        direction: 'from',  // from:从下向上；to: 从上向下
+      };
     },
     mounted() {
       this.$nextTick(() => {
@@ -21,6 +25,7 @@
     },
     methods: {
       layoutFn() {
+        let self = this;
         let {width, height} = {
           width: 1000,
           height: 500
@@ -65,6 +70,29 @@
         let nodes = tree.nodes(root);
         nodes[0].y = 40;
         let links = tree.links(nodes);
+  
+        let node = svg.append('g')
+          .classed('nodeArea', true)
+          .selectAll('.node')
+          .data(nodes, d => d.id || (d.id = ++this.id_index))
+          .enter()
+          .append('g')
+          .classed('node', true)
+          .attr('transform', d => {
+            return 'translate(' + d.x + ',' + (d.y) + ')';
+          });
+  
+        // node.append('image')
+        //   .attr('width', 100)
+        //   .attr('height', 100)
+        //   .attr('xlink:href', logoImg)
+        //   .attr('fill', '#fff')
+        //   .attr('x', -50)
+        //   .attr('y', -65);
+  
+        node.append('text')
+          .text(d => d.name)
+          .attr('text-anchor', 'middle');
         
         let link = svg.append('g')
           .classed('linkArea', true)
@@ -74,72 +102,49 @@
           .append('path')
           .classed('link', true)
           .attr('d', diagonal)
+          .attr('id', d => `path_${d.source.id}_${d.target.id}`)
           .attr('fill', 'none')
           .attr('stroke', 'teal')
           .attr('stroke-width', 2)
           .attr('marker-end', 'url(#arrow)');
-        
-        let circleG = svg.append('g');
-        
-        let node = svg.append('g')
-          .classed('nodeArea', true)
-          .selectAll('.node')
-          .data(nodes)
-          .enter()
-          .append('g')
-          .classed('node', true)
-          .attr('transform', (d, i) => {
-            return 'translate(' + d.x + ',' + (d.y) + ')';
-          });
-        
-        // node.append('image')
-        //   .attr('width', 100)
-        //   .attr('height', 100)
-        //   .attr('xlink:href', logoImg)
-        //   .attr('fill', '#fff')
-        //   .attr('x', -50)
-        //   .attr('y', -65);
-        
-        node.append('text')
-          .text(d => d.name);
-        
-        function addCircle(i, delay) {
-          debugger;
-          let points = links[i];
+  
+  
+        function animatePath(i) {
           let path = link[0][i];
-          let circle = circleG.append('circle')
-            .classed('c', true)
-            .attr('r', 6)
-            .attr('fill', 'orangered')
-            .attr('transform', 'translate(' + points.source.x + ',' + points.source.y + ')');
-          
-          circle.transition()
-            .ease('linear')
-            .delay(delay || 0)
-            .duration(Math.random() * 500 + 1000)
-            .attrTween('transform', (d, i, a) => {
-              let l = path.getTotalLength(); // 路径的长度
-              return (t) => {
-                let p = path.getPointAtLength(t * l); // 返回给定路径上给定长度的点坐标
-                return 'translate(' + p.x + ',' + p.y + ')';
-              };
-            })
-            .each('end', () => {
-              debugger;
-              // d3.select(this).remove();
-              d3.selectAll('.c').remove();
-              addCircle(i, Math.random() * 500);
+          let d_str = path.getAttribute('d');
+          // debugger;
+          let d_arr = d_str.split(' ');
+          let d_arr0 = d_arr[0].split('C');
+          let new_path = `M${d_arr[2]}C${d_arr[1]} ${d_arr0[1]} ${d_arr0[0].substr(1)}`;
+          let d_path_id = path.id;
+          let img = svg.append('image')
+            .attr({
+              'width': '20',
+              'height': '10',
+              'x': '-10',
+              'y': '-5',
+              'xlink:href': path_icon,
             });
-        };
+          let animateMotion = img.append('animateMotion')
+            .attr({
+              'dur': '5s',
+              'fill': 'freeze',
+              'rotate': 'auto',
+              'repeatCount': 'indefinite',
+              'path': new_path,
+            });
+          animateMotion.append('mpath')
+            .attr('xlink:href', () => {
+              if (self.direction === 'to') {
+                return `#${d_path_id}`
+              }
+            });
+        }
         
         link.each((d, i) => {
-          console.log(d);
-          if (d.source.name === '中国') {
-            addCircle(i, Math.random() * 500);
+          if ((d.source.name === '四川' && d.target.name === '成都1') || (d.source.name === '中国' && d.target.name === '四川')) {
+            animatePath(i);
           }
-          // if (d.source.name === '四川' && d.target.name === '成都') {
-          //   addCircle(i, Math.random() * 500);
-          // }
         });
       }
     }
