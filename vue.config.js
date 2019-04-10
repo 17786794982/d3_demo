@@ -1,5 +1,5 @@
 module.exports = {
-  baseUrl: '/d3_demo/',
+  baseUrl: '',
   outputDir: 'docs',
   assetsDir: undefined,
   runtimeCompiler: undefined,
